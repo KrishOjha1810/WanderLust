@@ -1,4 +1,8 @@
 const Listing = require("../models/listing");
+const mbxGeocoding = require('@mapbox/mapbox-sdk/services/geocoding');
+const mapToken = process.env.MAP_TOKEN;
+const geocodingClient = mbxGeocoding({ accessToken: mapToken});
+const { cloudinary } = require('../cloudConfig');
 
 module.exports.index = async(req, res) => {
     const allListings = await Listing.find({});
@@ -19,21 +23,42 @@ module.exports.showListing = async (req, res) => {
             }
         })
         .populate("owner");
+    listing.views += 1;
+    await listing.save();
+
     if(!listing){
         req.flash("error", "Listing you requested for does not exist!");
         res.redirect("/listings");
     }
-    console.log(listing);
+    // console.log(listing);
     res.render("listings/show.ejs", { listing });
 };
 
 module.exports.createListing = async (req, res, next) => {
-    let url = req.file.path;
-    let filename = req.file.filename;
+    let response = await geocodingClient.forwardGeocode({
+        query: req.body.listing.location,
+        limit: 1,
+      })
+        .send();
+    
+    // let url = req.file.path;
+    // let filename = req.file.filename;
     const newListing = new Listing(req.body.listing);
     newListing.owner = req.user._id;
-    newListing.image = {url, filename};
-    await newListing.save();
+    // const urls = [];
+    const uploadedImages = [];
+    for (let i = 0; i < req.files.length; i++) { 
+        const result = await cloudinary.uploader.upload(req.files[i].path);
+        uploadedImages.push({
+            url: result.secure_url,
+            filename: result.original_filename
+        });
+    }
+    newListing.image = uploadedImages;
+    newListing.geometry = response.body.features[0].geometry;
+    
+    let savedListing = await newListing.save();
+    // console.log(savedListing);
     req.flash("success", "New Listing Created!");
     res.redirect("/listings");
 };
@@ -45,8 +70,8 @@ module.exports.renderEditform = async (req, res) => {
         req.flash("error", "Listing you requested for does not exist!");
         res.redirect("/listings");
     }
-    let origionalImageUrl = listing.image.url;
-    origionalImageUrl= origionalImageUrl.replace("/upload", "/upload/w_250")
+    let origionalImageUrl = listing.image[0].url;
+    origionalImageUrl= origionalImageUrl.replace("/upload", "/upload/h_300/w_250")
     res.render("listings/edit.ejs", { listing, origionalImageUrl });
 };
 
@@ -66,7 +91,7 @@ module.exports.upadeteListing = async (req, res) => {
 module.exports.destroyListing = async (req, res) => {
     let { id } = req.params;
     let deletedListing = await Listing.findByIdAndDelete(id);
-    console.log(deletedListing);
+    // console.log(deletedListing);
     req.flash("success", "Listing Deleted!");
     res.redirect("/listings");
 }

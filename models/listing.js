@@ -8,13 +8,19 @@ const listingSchema = new Schema({
         required: true,
     }, 
     description: String,
-    image: {
+    image: [
+        {
         url: String,
         filename: String,
-    },
+        },
+    ],
     price: Number,
     location: String,
     country: String,
+    views: {
+        type: Number,
+        default: 0 // Default value for view count
+    },
     reviews: [
         {
             type: Schema.Types.ObjectId,
@@ -29,6 +35,17 @@ const listingSchema = new Schema({
     //     type : String,
     //     enum: ["mountains", "arctic", "farms", "deserts"]
     // }
+    geometry: {
+        type: {
+            type: String, // Don't do `{ location: { type: String } }`
+            enum: ['Point'], // 'location.type' must be 'Point'
+            required: true
+          },
+          coordinates: {
+            type: [Number],
+            required: true
+          }
+    }
 });
 listingSchema.post("findOneAndDelete", async(listing) =>{
     if(listing) {
